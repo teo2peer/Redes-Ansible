@@ -1,0 +1,9 @@
+---
+- name: Daemon reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart firewall
+  ansible.builtin.systemd:
+    name: script_firewall.service
+    state: restarted

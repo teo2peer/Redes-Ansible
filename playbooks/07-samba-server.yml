@@ -1,0 +1,5 @@
+---
+- hosts: samba_server
+  become: true
+  roles:
+    - samba_server

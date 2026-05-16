@@ -1,0 +1,6 @@
+# Gestionado por Ansible - rol nagios_client
+command[check_root]=/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -p /
+command[check_ping]=/usr/lib/nagios/plugins/check_ping -H {{ nagios_client_ip }} -w 100.0,20% -c 500.0,60% -p 5
+command[check_ssh]=/usr/lib/nagios/plugins/check_ssh -4 {{ nagios_client_ip }}
+command[check_http]=/usr/lib/nagios/plugins/check_http -I {{ nagios_client_ip }}
+command[check_apt]=/usr/lib/nagios/plugins/check_apt

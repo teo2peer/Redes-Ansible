@@ -1,0 +1,27 @@
+---
+- name: Instalar samba
+  ansible.builtin.apt:
+    name: samba
+    state: present
+    update_cache: true
+
+- name: Crear dir compartido
+  ansible.builtin.file:
+    path: "{{ samba_share_path }}"
+    state: directory
+    owner: nobody
+    group: nogroup
+    mode: '0777'
+
+- name: Config smb.conf
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    mode: '0644'
+  notify: Restart smbd
+
+- name: smbd activo
+  ansible.builtin.service:
+    name: smbd
+    enabled: true
+    state: started

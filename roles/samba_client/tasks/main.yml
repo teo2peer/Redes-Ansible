@@ -1,0 +1,20 @@
+---
+- name: Instalar cifs-utils
+  ansible.builtin.apt:
+    name: cifs-utils
+    state: present
+    update_cache: true
+
+- name: Crear punto de montaje
+  ansible.builtin.file:
+    path: "{{ samba_mount_point }}"
+    state: directory
+    mode: '0755'
+
+- name: fstab montaje samba
+  ansible.posix.mount:
+    path: "{{ samba_mount_point }}"
+    src: "//{{ hostvars['vbox2'].ip }}/{{ samba_share_name }}"
+    fstype: cifs
+    opts: "guest,_netdev,uid=1000,gid=1000,iocharset=utf8,vers=3.0"
+    state: mounted

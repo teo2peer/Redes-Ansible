@@ -1,0 +1,6 @@
+---
+nagios_server_ip: 192.168.0.150
+nrpe_cfg: /etc/nagios/nrpe.cfg
+nrpe_local_cfg: /etc/nagios/nrpe_local.cfg
+# Gateway usa ip_int, resto ip
+nagios_client_ip: "{{ ip | default(ip_int) }}"

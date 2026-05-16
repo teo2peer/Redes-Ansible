@@ -1,0 +1,12 @@
+---
+# Orquesta todo. Ejecutar primero 00-bootstrap-ssh.yml por separado con --ask-pass.
+- import_playbook: 01-common.yml
+- import_playbook: 02-gateway.yml
+- import_playbook: 05-dns-master.yml
+- import_playbook: 06-dns-slave.yml
+- import_playbook: 03-web.yml
+- import_playbook: 04-ftp.yml
+- import_playbook: 07-samba-server.yml
+- import_playbook: 08-samba-clients.yml
+- import_playbook: 09-monitor.yml
+- import_playbook: 10-nagios-clients.yml

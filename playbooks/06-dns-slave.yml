@@ -1,0 +1,5 @@
+---
+- hosts: dns_slave
+  become: true
+  roles:
+    - dns_slave

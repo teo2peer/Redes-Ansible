@@ -1,0 +1,39 @@
+---
+- name: Activar ip_forward permanente
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    sysctl_file: /etc/sysctl.conf
+    reload: true
+
+- name: Crear /root/bin
+  ansible.builtin.file:
+    path: /root/bin
+    state: directory
+    owner: root
+    mode: '0755'
+
+- name: Plantilla firewall.sh
+  ansible.builtin.template:
+    src: firewall.sh.j2
+    dest: /root/bin/firewall.sh
+    owner: root
+    mode: '0755'
+  notify: Restart firewall
+
+- name: Unit systemd firewall
+  ansible.builtin.copy:
+    src: script_firewall.service
+    dest: /etc/systemd/system/script_firewall.service
+    mode: '0644'
+  notify:
+    - Daemon reload
+    - Restart firewall
+
+- name: Habilitar y arrancar firewall
+  ansible.builtin.systemd:
+    name: script_firewall.service
+    enabled: true
+    state: started
+    daemon_reload: true

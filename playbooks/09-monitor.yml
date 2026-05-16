@@ -1,0 +1,5 @@
+---
+- hosts: monitor_master:monitor_agents
+  become: true
+  roles:
+    - monitor

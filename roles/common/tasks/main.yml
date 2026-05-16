@@ -1,0 +1,42 @@
+---
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: /etc/hosts con todos los hosts del dominio
+  ansible.builtin.template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: apt update + dist-upgrade
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    cache_valid_time: 3600
+
+- name: Paquetes base
+  ansible.builtin.apt:
+    name:
+      - vim
+      - curl
+      - dnsutils
+      - net-tools
+    state: present
+
+- name: Asegurar dir netplan
+  ansible.builtin.file:
+    path: /etc/netplan
+    state: directory
+    mode: '0755'
+
+- name: Configurar netplan
+  ansible.builtin.template:
+    src: netplan.yaml.j2
+    dest: /etc/netplan/01-network-manager-all.yaml
+    owner: root
+    group: root
+    mode: '0600'
+  notify: Apply netplan

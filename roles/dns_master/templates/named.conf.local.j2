@@ -1,0 +1,13 @@
+zone "{{ domain }}" {
+    type master;
+    file "/etc/bind/db.{{ domain }}";
+    also-notify { {{ hostvars['vbox-DNS2'].ip }}; };
+    allow-transfer { {{ hostvars['vbox-DNS2'].ip }}; };
+};
+
+zone "0.168.192.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.192";
+    also-notify { {{ hostvars['vbox-DNS2'].ip }}; };
+    allow-transfer { {{ hostvars['vbox-DNS2'].ip }}; };
+};

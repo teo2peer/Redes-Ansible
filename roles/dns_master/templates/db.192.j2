@@ -1,0 +1,17 @@
+; BIND: zona inversa 192.168.0/24 (generado por Ansible)
+$TTL 604800
+@ IN SOA {{ domain }}. root.{{ domain }}. (
+    {{ ansible_date_time.epoch }} ; Serial
+    604800
+    86400
+    2419200
+    604800 )
+;
+@ IN NS vbox-DNS.{{ domain }}.
+@ IN NS vbox-DNS2.{{ domain }}.
+{% for h in groups['all'] %}
+{%   set hv = hostvars[h] %}
+{%   set ip = hv.ip | default(hv.ip_int | default(hv.ansible_host)) %}
+{%   set last = ip.split('.')[-1] %}
+{{ '%-3s' | format(last) }} IN PTR {{ h }}.{{ domain }}.
+{% endfor %}

@@ -1,0 +1,60 @@
+---
+- name: Generar par de claves en control node
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Crear keypair si no existe
+      community.crypto.openssh_keypair:
+        path: "{{ ssh_key_path }}"
+        type: rsa
+        size: 4096
+      delegate_to: localhost
+      run_once: true
+
+- name: Distribuir clave pública a todos los nodos
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Asegurar usuario admin existe
+      ansible.builtin.user:
+        name: "{{ admin_user }}"
+        groups: sudo
+        append: true
+        shell: /bin/bash
+
+    - name: Instalar clave pública
+      ansible.posix.authorized_key:
+        user: "{{ admin_user }}"
+        state: present
+        key: "{{ lookup('file', ssh_key_path + '.pub') }}"
+
+    - name: Sudo sin password para admin
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-{{ admin_user }}
+        content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+        mode: '0440'
+        validate: 'visudo -cf %s'
+
+- name: Distribuir clave de agentes -> gateway (para monitor)
+  hosts: monitor_agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Generar clave root en agente
+      ansible.builtin.user:
+        name: root
+        generate_ssh_key: true
+        ssh_key_bits: 2048
+        ssh_key_file: .ssh/id_rsa
+
+    - name: Leer pubkey root agente
+      ansible.builtin.slurp:
+        src: /root/.ssh/id_rsa.pub
+      register: agent_pub
+
+    - name: Autorizar pubkey en gateway
+      ansible.posix.authorized_key:
+        user: root
+        key: "{{ agent_pub.content | b64decode }}"
+      delegate_to: vbox-gateway

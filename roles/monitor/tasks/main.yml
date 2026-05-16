@@ -1,0 +1,35 @@
+---
+- name: Crear dir logs en orquestador
+  ansible.builtin.file:
+    path: "{{ monitor_log_dir }}"
+    state: directory
+    owner: root
+    mode: '0755'
+  when: "'monitor_master' in group_names"
+
+- name: Script resumen en orquestador
+  ansible.builtin.copy:
+    dest: /usr/local/bin/monitor-resumen.sh
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      for f in {{ monitor_log_dir }}/*.log; do
+        echo "===== $f ====="
+        tail -n 5 "$f"
+      done
+  when: "'monitor_master' in group_names"
+
+- name: Script agente
+  ansible.builtin.template:
+    src: monitor.sh.j2
+    dest: /usr/local/bin/monitor.sh
+    mode: '0755'
+  when: "'monitor_agents' in group_names"
+
+- name: Cron agente cada {{ monitor_interval_min }} min
+  ansible.builtin.cron:
+    name: "monitor ASR"
+    minute: "*/{{ monitor_interval_min }}"
+    user: root
+    job: "/usr/local/bin/monitor.sh"
+  when: "'monitor_agents' in group_names"

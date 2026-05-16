@@ -1,0 +1,5 @@
+---
+- hosts: ftp
+  become: true
+  roles:
+    - ftp

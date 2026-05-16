@@ -1,0 +1,12 @@
+[Unit]
+Description=Servicio firewall ASR
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/bin/firewall.sh
+RemainAfterExit=true
+
+[Install]
+WantedBy=default.target

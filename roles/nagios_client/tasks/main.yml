@@ -1,0 +1,37 @@
+---
+- name: Instalar NRPE y plugins
+  ansible.builtin.apt:
+    name: [nagios-nrpe-server, monitoring-plugins]
+    state: present
+    update_cache: true
+
+- name: nrpe.cfg - fijar server_address al IP del cliente
+  ansible.builtin.lineinfile:
+    path: "{{ nrpe_cfg }}"
+    regexp: '^[#\s]*server_address\s*='
+    line: "server_address={{ nagios_client_ip }}"
+    state: present
+  notify: Restart nrpe
+
+- name: nrpe.cfg - permitir host Nagios
+  ansible.builtin.lineinfile:
+    path: "{{ nrpe_cfg }}"
+    regexp: '^[#\s]*allowed_hosts\s*='
+    line: "allowed_hosts=127.0.0.1,::1,{{ nagios_server_ip }}"
+    state: present
+  notify: Restart nrpe
+
+- name: nrpe_local.cfg - comandos check_*
+  ansible.builtin.template:
+    src: nrpe_local.cfg.j2
+    dest: "{{ nrpe_local_cfg }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart nrpe
+
+- name: Servicio NRPE activo
+  ansible.builtin.service:
+    name: nagios-nrpe-server
+    enabled: true
+    state: started

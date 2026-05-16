@@ -1,0 +1,9 @@
+---
+admin_user: asr
+ssh_key_path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_ansible"
+samba_share_name: compartido
+samba_share_path: /srv/samba/compartido
+samba_mount_point: /mnt/compartido
+monitor_log_dir: /var/log/monitor
+monitor_interval_min: 1
+nagios_server_ip: 192.168.0.150

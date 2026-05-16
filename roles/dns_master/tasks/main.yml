@@ -1,0 +1,40 @@
+---
+- name: Instalar bind9
+  ansible.builtin.apt:
+    name: [bind9, bind9utils, dnsutils]
+    state: present
+    update_cache: true
+
+- name: named.conf.options (sin forwarders, autoritativo)
+  ansible.builtin.template:
+    src: named.conf.options.j2
+    dest: /etc/bind/named.conf.options
+    mode: '0644'
+  notify: Restart bind9
+
+- name: named.conf.local (zonas master)
+  ansible.builtin.template:
+    src: named.conf.local.j2
+    dest: /etc/bind/named.conf.local
+    mode: '0644'
+  notify: Restart bind9
+
+- name: Zona directa db.asr.es
+  ansible.builtin.template:
+    src: db.asr.es.j2
+    dest: /etc/bind/db.{{ domain }}
+    mode: '0644'
+  notify: Restart bind9
+
+- name: Zona inversa db.192
+  ansible.builtin.template:
+    src: db.192.j2
+    dest: /etc/bind/db.192
+    mode: '0644'
+  notify: Restart bind9
+
+- name: bind9 activo
+  ansible.builtin.service:
+    name: bind9
+    enabled: true
+    state: started

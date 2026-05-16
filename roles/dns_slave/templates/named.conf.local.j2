@@ -1,0 +1,11 @@
+zone "{{ domain }}" {
+    type slave;
+    file "/var/cache/bind/db.{{ domain }}";
+    masters { {{ hostvars['vbox-DNS'].ip }}; };
+};
+
+zone "0.168.192.in-addr.arpa" {
+    type slave;
+    file "/var/cache/bind/db.192";
+    masters { {{ hostvars['vbox-DNS'].ip }}; };
+};

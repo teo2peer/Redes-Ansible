@@ -1,0 +1,39 @@
+{# Netplan: gateway tiene 2 ifaces, resto 1 #}
+{% set ns_list = (dns_servers if dns_phase == 'final' else dns_forwarders) %}
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+{% if 'gateway' in group_names %}
+    {{ iface_int }}:
+      dhcp4: no
+      addresses:
+        - {{ ip_int }}/24
+    {{ iface_ext }}:
+      dhcp4: no
+      addresses:
+        - {{ ip_ext }}/{{ ext_prefix }}
+      nameservers:
+        search: [{{ domain }}]
+        addresses:
+{% for ns in ns_list %}
+          - {{ ns }}
+{% endfor %}
+      routes:
+        - to: default
+          via: {{ ext_gw }}
+{% else %}
+    {{ iface }}:
+      dhcp4: no
+      addresses:
+        - {{ ip }}/24
+      nameservers:
+        search: [{{ domain }}]
+        addresses:
+{% for ns in ns_list %}
+          - {{ ns }}
+{% endfor %}
+      routes:
+        - to: default
+          via: 192.168.0.1
+{% endif %}

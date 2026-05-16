@@ -1,0 +1,32 @@
+---
+- name: Instalar vsftpd
+  ansible.builtin.apt:
+    name: vsftpd
+    state: present
+    update_cache: true
+
+- name: Config vsftpd básica
+  ansible.builtin.copy:
+    dest: /etc/vsftpd.conf
+    mode: '0644'
+    content: |
+      listen=YES
+      listen_ipv6=NO
+      anonymous_enable=NO
+      local_enable=YES
+      write_enable=YES
+      local_umask=022
+      dirmessage_enable=YES
+      use_localtime=YES
+      xferlog_enable=YES
+      connect_from_port_20=YES
+      chroot_local_user=YES
+      allow_writeable_chroot=YES
+      pam_service_name=vsftpd
+  notify: Restart vsftpd
+
+- name: Servicio activo
+  ansible.builtin.service:
+    name: vsftpd
+    enabled: true
+    state: started

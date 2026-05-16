@@ -1,0 +1,14 @@
+#!/bin/sh
+# Monitor mínimo: CPU, RAM, disco. Envía al orquestador por SSH.
+HOST=$(hostname)
+TS=$(date '+%Y-%m-%d %H:%M:%S')
+CPU=$(top -bn1 | awk '/Cpu\(s\)/ {print 100 - $8 "%"}')
+RAM=$(free -m | awk '/Mem:/ {printf "%dMB/%dMB (%.1f%%)", $3, $2, $3/$2*100}')
+DISK=$(df -h / | awk 'NR==2 {print $3"/"$2" ("$5")"}')
+LINE="$TS host=$HOST cpu=$CPU ram=$RAM disk=$DISK"
+
+GW={{ hostvars['vbox-gateway'].ip_int }}
+LOG={{ monitor_log_dir }}/${HOST}.log
+
+ssh -o StrictHostKeyChecking=no -o BatchMode=yes root@${GW} \
+    "mkdir -p {{ monitor_log_dir }} && echo \"$LINE\" >> $LOG"

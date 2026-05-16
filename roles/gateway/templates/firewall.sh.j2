@@ -1,0 +1,24 @@
+#!/bin/sh
+# Generado por Ansible — no editar a mano
+IFACE_EXT={{ iface_ext }}
+IFACE_INT={{ iface_int }}
+WEB_IP={{ hostvars['vbox1'].ip }}
+FTP_IP={{ hostvars['vbox2'].ip }}
+
+iptables --flush
+iptables -t nat --flush
+
+# NAT salida
+iptables -t nat -A POSTROUTING -o $IFACE_EXT -j MASQUERADE
+
+# Reenvío puertos: 80 -> web, 21 -> ftp
+iptables -t nat -A PREROUTING -p tcp -i $IFACE_EXT --dport 80 -j DNAT --to $WEB_IP
+iptables -t nat -A PREROUTING -p tcp -i $IFACE_EXT --dport 21 -j DNAT --to $FTP_IP
+
+# Permitir forwarding
+iptables -A FORWARD -i $IFACE_INT -o $IFACE_EXT -j ACCEPT
+iptables -A FORWARD -i $IFACE_EXT -o $IFACE_INT -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -A FORWARD -p tcp -d $WEB_IP --dport 80 -j ACCEPT
+iptables -A FORWARD -p tcp -d $FTP_IP --dport 21 -j ACCEPT
+
+exit 0
