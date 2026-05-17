@@ -1,0 +1,5 @@
+---
+- hosts: nagios_server
+  become: true
+  roles:
+    - nagios_server

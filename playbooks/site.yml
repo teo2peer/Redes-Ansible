@@ -10,3 +10,4 @@
 - import_playbook: 08-samba-clients.yml
 - import_playbook: 09-monitor.yml
 - import_playbook: 10-nagios-clients.yml
+- import_playbook: 11-nagios-server.yml

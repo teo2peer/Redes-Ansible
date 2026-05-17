@@ -1,0 +1,5 @@
+---
+- name: Restart nagios
+  ansible.builtin.service:
+    name: "{{ nagios_service }}"
+    state: restarted

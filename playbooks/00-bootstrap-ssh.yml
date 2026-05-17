@@ -13,6 +13,7 @@
 
 - name: Distribuir clave pública a todos los nodos
   hosts: all
+  remote_user: "{{ bootstrap_user | default('osboxes') }}"
   become: true
   gather_facts: false
   tasks:
@@ -41,6 +42,9 @@
   become: true
   gather_facts: false
   tasks:
+    # Esta play se ejecuta DESPUÉS de la anterior, así que el usuario
+    # admin (asr) ya existe con clave SSH. Conectamos como asr usando
+    # el ansible_user del inventario.
     - name: Generar clave root en agente
       ansible.builtin.user:
         name: root

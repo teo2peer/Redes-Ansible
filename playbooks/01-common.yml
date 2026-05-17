@@ -1,6 +1,6 @@
 ---
 - name: Configuración base, hostname, hosts, netplan, upgrade
-  hosts: all
+  hosts: "all:!nagios_server"
   become: true
   roles:
     - common

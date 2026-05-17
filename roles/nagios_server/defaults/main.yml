@@ -1,0 +1,7 @@
+---
+nagios_cfg_dir: /usr/local/nagios/etc
+nagios_servers_dir: "{{ nagios_cfg_dir }}/servers"
+nagios_commands_cfg: "{{ nagios_cfg_dir }}/objects/commands.cfg"
+nagios_service: nagios
+nagios_owner: nagios
+nagios_group: nagios

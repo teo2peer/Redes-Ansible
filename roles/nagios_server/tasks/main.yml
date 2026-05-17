@@ -1,0 +1,45 @@
+---
+- name: Asegurar directorio de configs por host
+  ansible.builtin.file:
+    path: "{{ nagios_servers_dir }}"
+    state: directory
+    owner: "{{ nagios_owner }}"
+    group: "{{ nagios_group }}"
+    mode: '0755'
+
+- name: Asegurar definición del comando check_nrpe en commands.cfg
+  ansible.builtin.blockinfile:
+    path: "{{ nagios_commands_cfg }}"
+    marker: "# {mark} ANSIBLE BLOCK check_nrpe"
+    block: |
+      define command {
+          command_name check_nrpe
+          command_line $USER1$/check_nrpe -H $HOSTADDRESS$ -c $ARG1$
+      }
+  notify: Restart nagios
+
+- name: Generar fichero .cfg por cada cliente Nagios
+  ansible.builtin.template:
+    src: host.cfg.j2
+    dest: "{{ nagios_servers_dir }}/{{ item }}.cfg"
+    owner: "{{ nagios_owner }}"
+    group: "{{ nagios_group }}"
+    mode: '0644'
+  loop: "{{ groups['nagios_clients'] }}"
+  vars:
+    nagios_host: "{{ item }}"
+    nagios_host_ip: "{{ hostvars[item].ip | default(hostvars[item].ip_int) }}"
+    nagios_host_groups: "{{ hostvars[item].group_names }}"
+  notify: Restart nagios
+
+- name: Validar configuración de Nagios
+  ansible.builtin.command: /usr/local/nagios/bin/nagios -v {{ nagios_cfg_dir }}/nagios.cfg
+  register: nagios_verify
+  changed_when: false
+  failed_when: nagios_verify.rc != 0
+
+- name: Servicio nagios activo y habilitado
+  ansible.builtin.service:
+    name: "{{ nagios_service }}"
+    enabled: true
+    state: started

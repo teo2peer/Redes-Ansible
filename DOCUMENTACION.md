@@ -304,9 +304,33 @@ Para que esa copia por SSH funcione sin intervención manual, el playbook de boo
 
 ---
 
-## 10. Configuración de clientes Nagios NRPE
+## 10. Monitorización con Nagios (clientes NRPE + configuración del servidor)
 
-Para integrarnos con el servidor Nagios existente en `192.168.0.150` (configurado manualmente en clase, fuera del scope de este Ansible) instalamos el agente NRPE en los cinco nodos del dominio. En el inventario se añade un grupo `nagios_clients` que reúne a los cinco hosts, y en `group_vars/all.yml` se define `nagios_server_ip: 192.168.0.150` para usarlo en todo el proyecto.
+Para integrarnos con el servidor Nagios existente en `192.168.0.150` (la instalación inicial del servidor y el primer cliente de ejemplo `192.168.0.151` se hicieron manualmente en clase siguiendo el Laboratorio 6), Ansible se encarga de dos tareas complementarias: instalar el agente NRPE en los cinco nodos del dominio y, acto seguido, generar y desplegar en el servidor Nagios los ficheros de configuración necesarios para que esos nodos aparezcan monitorizados. Todo el proceso se lanza con un único comando.
+
+### Inventario
+
+En el inventario se añaden dos grupos. `nagios_clients` reúne a los cinco hosts que se van a monitorizar, mientras que `nagios_server` apunta a la máquina que aloja Nagios (192.168.0.150):
+
+```yaml
+    nagios_clients:
+      hosts:
+        vbox-gateway:
+        vbox1:
+        vbox2:
+        vbox-DNS:
+        vbox-DNS2:
+    nagios_server:
+      hosts:
+        vbox-nagios:
+          ansible_host: 192.168.0.150
+          ip: 192.168.0.150
+          iface: enp0s3
+```
+
+Como el servidor Nagios ya tiene una configuración propia hecha a mano siguiendo el lab (Apache, htpasswd, `nagios.cfg`, plugins, etc.), no queremos que el rol `common` lo sobrescriba. Por eso `playbooks/01-common.yml` apunta a `all:!nagios_server`, lo que mantiene a `vbox-nagios` fuera del rol base pero dentro del alcance del rol específico `nagios_server`. En `group_vars/all.yml` se define `nagios_server_ip: 192.168.0.150`, valor que consume el rol `nagios_client` para construir `allowed_hosts` en cada agente.
+
+### Rol `nagios_client` (instalación de agentes NRPE)
 
 El rol `nagios_client` define en `defaults/main.yml` el valor del servidor Nagios y la IP del cliente, que se resuelve automáticamente a `ip` (o `ip_int` en el caso del gateway) sin necesidad de definir variables nuevas por host:
 
@@ -367,9 +391,97 @@ command[check_http]=/usr/lib/nagios/plugins/check_http -I {{ nagios_client_ip }}
 command[check_apt]=/usr/lib/nagios/plugins/check_apt
 ```
 
-El handler `Restart nrpe` reinicia el servicio si cualquiera de las tareas anteriores produjo un cambio. El playbook que aplica este rol es `playbooks/10-nagios-clients.yml`, registrado al final de `site.yml` para que cuando NRPE exponga sus checks (especialmente `check_http` y `check_ssh`), el resto de servicios ya estén operativos.
+El handler `Restart nrpe` reinicia el servicio si cualquiera de las tareas anteriores produjo un cambio. El playbook que aplica este rol es `playbooks/10-nagios-clients.yml`.
 
-Tras desplegar los clientes, en el servidor Nagios hay que crear los ficheros de host en `/usr/local/nagios/etc/servers/<host>.cfg` con un `define host` y un `define service` por cada `check_nrpe` que se quiera observar, y reiniciar con `systemctl restart nagios`. En cuanto al firewall, no hace falta tocarlo: `192.168.0.150` está dentro de `192.168.0.0/24`, así que NRPE (TCP/5666) viaja por LAN sin pasar por el NAT del gateway.
+### Rol `nagios_server` (registro automático de hosts en Nagios)
+
+Una vez los agentes están escuchando, el siguiente paso es que el servidor Nagios sepa de su existencia. En lugar de editar a mano un fichero `.cfg` por cada host en `/usr/local/nagios/etc/servers/` (como propone el Laboratorio 6), el rol `nagios_server` los genera automáticamente recorriendo el grupo `nagios_clients` del inventario. Los defaults del rol concentran las rutas:
+
+```yaml
+nagios_cfg_dir: /usr/local/nagios/etc
+nagios_servers_dir: "{{ nagios_cfg_dir }}/servers"
+nagios_commands_cfg: "{{ nagios_cfg_dir }}/objects/commands.cfg"
+nagios_service: nagios
+nagios_owner: nagios
+nagios_group: nagios
+```
+
+Las tareas hacen tres cosas. Primero, garantizan que existe el directorio `servers/` con la propiedad correcta. Segundo, aseguran con `blockinfile` que el comando `check_nrpe` está definido en `commands.cfg` (el lab pide añadirlo a mano en T6.5; aquí queda automatizado y es idempotente gracias al marker). Tercero, recorren con un `loop` el grupo `nagios_clients` y, por cada host, generan un fichero `<host>.cfg` desde plantilla, consultando las variables del host via `hostvars`:
+
+```yaml
+- name: Asegurar directorio de configs por host
+  ansible.builtin.file:
+    path: "{{ nagios_servers_dir }}"
+    state: directory
+    owner: "{{ nagios_owner }}"
+    group: "{{ nagios_group }}"
+    mode: '0755'
+
+- name: Asegurar definición del comando check_nrpe en commands.cfg
+  ansible.builtin.blockinfile:
+    path: "{{ nagios_commands_cfg }}"
+    marker: "# {mark} ANSIBLE BLOCK check_nrpe"
+    block: |
+      define command {
+          command_name check_nrpe
+          command_line $USER1$/check_nrpe -H $HOSTADDRESS$ -c $ARG1$
+      }
+  notify: Restart nagios
+
+- name: Generar fichero .cfg por cada cliente Nagios
+  ansible.builtin.template:
+    src: host.cfg.j2
+    dest: "{{ nagios_servers_dir }}/{{ item }}.cfg"
+    owner: "{{ nagios_owner }}"
+    group: "{{ nagios_group }}"
+    mode: '0644'
+  loop: "{{ groups['nagios_clients'] }}"
+  vars:
+    nagios_host: "{{ item }}"
+    nagios_host_ip: "{{ hostvars[item].ip | default(hostvars[item].ip_int) }}"
+    nagios_host_groups: "{{ hostvars[item].group_names }}"
+  notify: Restart nagios
+
+- name: Validar configuración de Nagios
+  ansible.builtin.command: /usr/local/nagios/bin/nagios -v {{ nagios_cfg_dir }}/nagios.cfg
+  register: nagios_verify
+  changed_when: false
+  failed_when: nagios_verify.rc != 0
+
+- name: Servicio nagios activo y habilitado
+  ansible.builtin.service:
+    name: "{{ nagios_service }}"
+    enabled: true
+    state: started
+```
+
+La validación previa al reinicio (`nagios -v`) actúa como red de seguridad: si la plantilla produjese una sintaxis inválida, el playbook falla **antes** de reiniciar el servicio, evitando dejar Nagios caído. El handler `Restart nagios` solo se dispara si hubo cambios efectivos en algún `.cfg`.
+
+La plantilla `host.cfg.j2` produce un `define host` y cuatro `define service` (PING, Check SSH, Check Root/Disk, Check APT Update) para todos los hosts, más un quinto `define service` (Check HTTP) que solo aparece si el host pertenece al grupo `web`, gracias a un `{% if 'web' in nagios_host_groups %}`. Así, añadir un host al inventario con su grupo correcto basta para que aparezca monitorizado con el set de checks adecuado, sin tocar nada en el servidor Nagios.
+
+### Despliegue con un solo comando
+
+Todo lo anterior se ejecuta con un único `ansible-playbook`, gracias al orden en `site.yml`:
+
+```bash
+ansible-playbook playbooks/site.yml
+```
+
+`site.yml` importa `10-nagios-clients.yml` (instala NRPE en los cinco nodos) y a continuación `11-nagios-server.yml` (genera los `.cfg` en el servidor y recarga el servicio). Si solo se quiere actuar sobre la monitorización, sin reaplicar el resto del ecosistema, se pueden lanzar los dos playbooks de Nagios de forma aislada:
+
+```bash
+ansible-playbook playbooks/10-nagios-clients.yml playbooks/11-nagios-server.yml
+```
+
+### Firewall y prerrequisitos
+
+`192.168.0.150` está dentro de la red `192.168.0.0/24`, así que NRPE (TCP/5666) viaja por LAN sin pasar por el NAT del gateway: no hace falta tocar el firewall. Como prerrequisito, `vbox-nagios` debe permitir SSH desde el nodo de control con el usuario `asr` y sudo (idealmente NOPASSWD). Si todavía no se hizo, se ejecuta el bootstrap limitado a esta máquina:
+
+```bash
+ansible-playbook playbooks/00-bootstrap-ssh.yml --limit vbox-nagios --ask-pass --ask-become-pass
+```
+
+El cliente manual `192.168.0.151` (`vbox-Nagios-cliente`) creado en el lab queda al margen del inventario: se sigue gestionando a mano y su `.cfg` ya está en `/usr/local/nagios/etc/servers/`. Si en algún momento se quiere automatizar también, basta con añadirlo al grupo `nagios_clients` y reaplicar `site.yml`.
 
 ---
 
