@@ -7,6 +7,12 @@
     group: "{{ nagios_group }}"
     mode: '0755'
 
+- name: Comprobar si check_nrpe ya está definido en commands.cfg
+  ansible.builtin.command: grep -E '^\s*command_name\s+check_nrpe\b' {{ nagios_commands_cfg }}
+  register: check_nrpe_exists
+  changed_when: false
+  failed_when: false
+
 - name: Asegurar definición del comando check_nrpe en commands.cfg
   ansible.builtin.blockinfile:
     path: "{{ nagios_commands_cfg }}"
@@ -16,6 +22,7 @@
           command_name check_nrpe
           command_line $USER1$/check_nrpe -H $HOSTADDRESS$ -c $ARG1$
       }
+  when: check_nrpe_exists.rc != 0
   notify: Restart nagios
 
 - name: Generar fichero .cfg por cada cliente Nagios
