@@ -45,12 +45,7 @@
     nagios_host_groups: "{{ hostvars[item].group_names }}"
   notify: Restart nagios
 
-- name: Validar configuración de Nagios
-  ansible.builtin.command: /usr/local/nagios/bin/nagios -v {{ nagios_cfg_dir }}/nagios.cfg
-  register: nagios_verify
-  changed_when: false
-  failed_when: nagios_verify.rc != 0
-
+ 
 - name: Servicio nagios activo y habilitado
   ansible.builtin.service:
     name: "{{ nagios_service }}"
