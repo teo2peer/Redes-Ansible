@@ -2,6 +2,10 @@
 - name: Generar par de claves en control node
   hosts: localhost
   gather_facts: false
+  vars:
+    # group_vars/all.yml no aplica a localhost (no está en el inventario),
+    # así que definimos la ruta aquí también.
+    ssh_key_path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_ansible"
   tasks:
     - name: Crear keypair si no existe
       community.crypto.openssh_keypair:
