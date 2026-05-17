@@ -81,14 +81,15 @@ Redes Ansible/
 │   └── all.yml
 ├── playbooks/
 │   ├── 00-bootstrap-ssh.yml  ← solo la primera vez
-│   ├── 01-common.yml ... 10-nagios-clients.yml
+│   ├── 01-common.yml ... 11-nagios-server.yml
 │   └── site.yml              ← orquestador
 └── roles/
     ├── common/ gateway/ web/ ftp/
     ├── dns_master/ dns_slave/
     ├── samba_server/ samba_client/
     ├── monitor/
-    └── nagios_client/
+    ├── nagios_client/
+    └── nagios_server/
 ```
 
 ### Configuración del inventario
@@ -102,6 +103,7 @@ El fichero `inventory/hosts.yml` define los cinco hosts del dominio `asr.es`, su
 | `vbox2` | 192.168.0.101 | FTP + Samba server | ftp, samba_server, monitor_agents, nagios_clients |
 | `vbox-DNS` | 192.168.0.102 | BIND9 master | dns_master, samba_clients, monitor_agents, nagios_clients |
 | `vbox-DNS2` | 192.168.0.103 | BIND9 slave | dns_slave, samba_clients, monitor_agents, nagios_clients |
+| `vbox-nagios` | 192.168.0.150 | Servidor Nagios Core 4.4.6 (config en `/usr/local/nagios/etc`) | nagios_server (excluido de `common`) |
 
 Las variables globales que aplican a todos los hosts se definen en la sección `all.vars` del inventario:
 
@@ -498,6 +500,39 @@ ansible-playbook playbooks/01-common.yml -e dns_phase=final
 ```
 
 A partir de ese momento, cualquier nuevo despliegue se hace sin contraseña simplemente con `ansible-playbook playbooks/site.yml`. Como todo es idempotente, si nada cambió todos los hosts saldrán con `changed=0`.
+
+### Inventario de playbooks
+
+Cada playbook se puede ejecutar de forma aislada con `ansible-playbook playbooks/<archivo>`. La siguiente tabla resume qué hace cada uno y sobre qué hosts actúa:
+
+| Comando | Hosts | Qué hace |
+|---|---|---|
+| `ansible-playbook playbooks/00-bootstrap-ssh.yml --ask-pass --ask-become-pass` | `all` (conexión como `osboxes` con contraseña) | Genera un keypair en el nodo de control, instala la pubkey en `osboxes` de cada host, configura `sudo` sin contraseña para `osboxes`, y (para los agentes del rol `monitor`) genera una clave de `root` en cada agente y la autoriza en el gateway |
+| `ansible-playbook playbooks/01-common.yml` | `all:!nagios_server` | Fija el `hostname`, regenera `/etc/hosts` con todo el inventario, lanza `apt update + dist-upgrade`, instala `vim curl dnsutils net-tools` y aplica `netplan` (gateway dual-NIC, resto single-NIC) |
+| `ansible-playbook playbooks/01-common.yml -e dns_phase=final` | `all:!nagios_server` | Igual que el anterior pero hace que los clientes apunten a los DNS internos (`192.168.0.102` y `.103`) en lugar de a los forwarders externos. Se ejecuta una vez BIND9 está operativo |
+| `ansible-playbook playbooks/02-gateway.yml` | `gateway` | Activa `net.ipv4.ip_forward=1`, despliega `/root/bin/firewall.sh` con MASQUERADE + DNAT (`80→vbox1`, `21→vbox2`) y registra el servicio `script_firewall.service` para que las reglas sobrevivan al reinicio |
+| `ansible-playbook playbooks/03-web.yml` | `web` | Instala Apache2 en `vbox1`, despliega un `index.html` mínimo y habilita el servicio |
+| `ansible-playbook playbooks/04-ftp.yml` | `ftp` | Instala vsftpd en `vbox2` con autenticación local, escritura permitida, chroot y sin acceso anónimo |
+| `ansible-playbook playbooks/05-dns-master.yml` | `dns_master` | Instala BIND9 en `vbox-DNS`, lo configura como autoritativo de `asr.es`, y genera las zonas directa e inversa a partir del inventario (con AXFR autorizado al esclavo) |
+| `ansible-playbook playbooks/06-dns-slave.yml` | `dns_slave` | Instala BIND9 en `vbox-DNS2` como esclavo del master, recibiendo las zonas vía AXFR |
+| `ansible-playbook playbooks/07-samba-server.yml` | `samba_server` | Instala Samba en `vbox2`, crea `/srv/samba/compartido` con permisos abiertos y publica el recurso `compartido` con acceso de invitado y escritura |
+| `ansible-playbook playbooks/08-samba-clients.yml` | `samba_clients` | Instala `cifs-utils` en los 4 clientes y monta `/mnt/compartido` apuntando al servidor (`//vbox2/compartido`) con entrada persistente en `/etc/fstab` |
+| `ansible-playbook playbooks/09-monitor.yml` | `monitor_master:monitor_agents` | En el gateway crea `/var/log/monitor/` y un script de resumen; en los 4 agentes instala `/usr/local/bin/monitor.sh` con cron cada minuto que envía CPU/RAM/disco por SSH al gateway |
+| `ansible-playbook playbooks/10-nagios-clients.yml` | `nagios_clients` | Instala `nagios-nrpe-server` y `monitoring-plugins` en los 5 nodos, ajusta `nrpe.cfg` (server_address y allowed_hosts), despliega `nrpe_local.cfg` con los `command[check_*]` y deja el servicio activo |
+| `ansible-playbook playbooks/11-nagios-server.yml` | `nagios_server` | En `vbox-nagios` (192.168.0.150) asegura `/usr/local/nagios/etc/servers/`, añade el comando `check_nrpe` a `commands.cfg` si falta, genera un `<host>.cfg` por cada cliente, valida la config con `nagios -v` y recarga el servicio `nagios` |
+| `ansible-playbook playbooks/site.yml` | (orquestador) | Importa en orden `01 → 02 → 05 → 06 → 03 → 04 → 07 → 08 → 09 → 10 → 11`, desplegando o reconciliando todo el ecosistema en una sola pasada |
+
+Opciones útiles aplicables a cualquier `ansible-playbook`:
+
+| Opción | Para qué sirve |
+|---|---|
+| `--limit <host_o_grupo>` | Restringe la ejecución a un subconjunto de hosts (ej. `--limit vbox-nagios`) |
+| `--check` | Modo simulación: dice qué cambiaría sin tocar nada (dry-run) |
+| `--diff` | Muestra el diff de los ficheros que cambien (útil junto con `--check`) |
+| `-e clave=valor` | Sobrescribe una variable por línea de comando (ej. `-e dns_phase=final`) |
+| `--tags <tag>` / `--skip-tags <tag>` | Ejecuta solo las tareas etiquetadas (o las salta) |
+| `-v` / `-vv` / `-vvv` | Aumenta el nivel de verbosidad para depurar |
+| `--syntax-check` | Solo valida la sintaxis YAML del playbook, no lo ejecuta |
 
 ### Tareas comunes
 
