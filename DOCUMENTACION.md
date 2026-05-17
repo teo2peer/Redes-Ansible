@@ -106,7 +106,7 @@ El fichero `inventory/hosts.yml` define los cinco hosts del dominio `asr.es`, su
 Las variables globales que aplican a todos los hosts se definen en la sección `all.vars` del inventario:
 
 ```yaml
-ansible_user: asr
+ansible_user: osboxes
 ansible_python_interpreter: /usr/bin/python3
 domain: asr.es
 internal_network: 192.168.0.0/24
@@ -122,7 +122,7 @@ La variable `dns_phase` merece una mención especial. Cuando se despliega el eco
 El fichero `group_vars/all.yml` reúne los valores compartidos por varios roles, manteniendo en un único punto las rutas y nombres que de otro modo se repetirían:
 
 ```yaml
-admin_user: asr
+admin_user: osboxes
 ssh_key_path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_ansible"
 samba_share_name: compartido
 samba_share_path: /srv/samba/compartido
@@ -151,7 +151,7 @@ La opción `host_key_checking = False` evita el prompt de aceptar la huella SSH 
 
 ### Bootstrap SSH y sudo sin contraseña
 
-Antes de poder lanzar el resto de playbooks de forma desatendida, hay que dejar lista la autenticación. El playbook `playbooks/00-bootstrap-ssh.yml` se encarga de generar una clave SSH dedicada en el nodo de control, distribuirla a los `authorized_keys` del usuario `asr` en todos los nodos, configurar `sudo` sin contraseña para `asr`, y (para el rol `monitor`) intercambiar claves de `root` entre los agentes y el gateway. Es la única vez en todo el ciclo de vida del proyecto que hace falta autenticarse con contraseña:
+Antes de poder lanzar el resto de playbooks de forma desatendida, hay que dejar lista la autenticación. Las VMs de OSBoxes vienen con el usuario `osboxes` ya creado y con sudo, así que el playbook `playbooks/00-bootstrap-ssh.yml` se limita a generar una clave SSH dedicada en el nodo de control, distribuirla a los `authorized_keys` de `osboxes` en todos los nodos, configurar `sudo` sin contraseña para `osboxes`, y (para el rol `monitor`) intercambiar claves de `root` entre los agentes y el gateway. Es la única vez en todo el ciclo de vida del proyecto que hace falta autenticarse con contraseña, así que conviene asegurarse antes de que `osboxes` tiene una contraseña real (las imágenes OSBoxes la traen vacía y SSH rechaza contraseñas vacías por defecto): `sudo passwd osboxes` en cada VM.
 
 ```bash
 ansible-playbook playbooks/00-bootstrap-ssh.yml --ask-pass --ask-become-pass
@@ -475,7 +475,7 @@ ansible-playbook playbooks/10-nagios-clients.yml playbooks/11-nagios-server.yml
 
 ### Firewall y prerrequisitos
 
-`192.168.0.150` está dentro de la red `192.168.0.0/24`, así que NRPE (TCP/5666) viaja por LAN sin pasar por el NAT del gateway: no hace falta tocar el firewall. Como prerrequisito, `vbox-nagios` debe permitir SSH desde el nodo de control con el usuario `asr` y sudo (idealmente NOPASSWD). Si todavía no se hizo, se ejecuta el bootstrap limitado a esta máquina:
+`192.168.0.150` está dentro de la red `192.168.0.0/24`, así que NRPE (TCP/5666) viaja por LAN sin pasar por el NAT del gateway: no hace falta tocar el firewall. Como prerrequisito, `vbox-nagios` debe permitir SSH desde el nodo de control con el usuario `osboxes` y sudo (idealmente NOPASSWD). Si todavía no se hizo, se ejecuta el bootstrap limitado a esta máquina:
 
 ```bash
 ansible-playbook playbooks/00-bootstrap-ssh.yml --limit vbox-nagios --ask-pass --ask-become-pass
@@ -489,7 +489,7 @@ El cliente manual `192.168.0.151` (`vbox-Nagios-cliente`) creado en el lab queda
 
 ### Despliegue completo
 
-La primera vez que se despliega el ecosistema, hace falta autenticarse con la contraseña del usuario `asr` para ejecutar el bootstrap y, a continuación, lanzar el orquestador completo. Después se cambia a la fase final de DNS para que los clientes apunten a los BIND internos:
+La primera vez que se despliega el ecosistema, hace falta autenticarse con la contraseña del usuario `osboxes` para ejecutar el bootstrap y, a continuación, lanzar el orquestador completo. Después se cambia a la fase final de DNS para que los clientes apunten a los BIND internos:
 
 ```bash
 ansible-playbook playbooks/00-bootstrap-ssh.yml --ask-pass --ask-become-pass

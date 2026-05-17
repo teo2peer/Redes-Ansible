@@ -11,26 +11,18 @@
       delegate_to: localhost
       run_once: true
 
-- name: Distribuir clave pública a todos los nodos
+- name: Distribuir clave pública y configurar sudo NOPASSWD para osboxes
   hosts: all
-  remote_user: "{{ bootstrap_user | default('osboxes') }}"
   become: true
   gather_facts: false
   tasks:
-    - name: Asegurar usuario admin existe
-      ansible.builtin.user:
-        name: "{{ admin_user }}"
-        groups: sudo
-        append: true
-        shell: /bin/bash
-
-    - name: Instalar clave pública
+    - name: Instalar clave pública en osboxes
       ansible.posix.authorized_key:
         user: "{{ admin_user }}"
         state: present
         key: "{{ lookup('file', ssh_key_path + '.pub') }}"
 
-    - name: Sudo sin password para admin
+    - name: Sudo sin password para osboxes
       ansible.builtin.copy:
         dest: /etc/sudoers.d/90-{{ admin_user }}
         content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
@@ -42,9 +34,6 @@
   become: true
   gather_facts: false
   tasks:
-    # Esta play se ejecuta DESPUÉS de la anterior, así que el usuario
-    # admin (asr) ya existe con clave SSH. Conectamos como asr usando
-    # el ansible_user del inventario.
     - name: Generar clave root en agente
       ansible.builtin.user:
         name: root

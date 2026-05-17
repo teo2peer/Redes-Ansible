@@ -1,5 +1,5 @@
 ---
-admin_user: asr
+admin_user: osboxes
 ssh_key_path: "{{ lookup('env','HOME') }}/.ssh/id_rsa_ansible"
 samba_share_name: compartido
 samba_share_path: /srv/samba/compartido
